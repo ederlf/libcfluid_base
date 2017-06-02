@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libcfluid_base
+Description: The network portion of LibFluid implemented in pure C
+Requires: libevent >= 2.0.5-stable libevent_pthreads >= 2.0.5-stable
+Version: 1.0
+Libs: -L${libdir} -lcfluid_base
+Cflags: -I${includedir}/cfluid
