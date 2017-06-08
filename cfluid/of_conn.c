@@ -24,13 +24,6 @@ void of_conn_send(struct of_conn *c, void* data, size_t len)
         base_of_conn_send(c->conn, (uint8_t*) data, len);
 }
 
-void of_conn_add_timed_callback(struct of_conn *oc, void* (*cb)(void*),
-                                      int interval,
-                                      void* arg) {
-    if (oc->conn != NULL)
-        base_of_conn_add_timed_callback(oc->conn, cb, interval, arg);
-}
-
 void of_conn_close(struct of_conn *oc) {
     // Don't close twice
     if (oc->conn == NULL)

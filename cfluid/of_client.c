@@ -1,5 +1,6 @@
 #include "of_client.h"
 #include "base/of.h"
+#include "base/vector.h"
 
 static void* send_echo(void* arg);
 static void base_message_callback(struct base_of_conn* c, 
@@ -137,8 +138,9 @@ static void base_message_callback(struct base_of_conn* c,
         reply.capabilities = ofsc->capabilities;
         of_conn_send(cc, &reply, sizeof(reply));
 
-        if (ofsc->liveness_check)
-            of_conn_add_timed_callback(cc, send_echo, ofsc->echo_interval * 1000, cc );
+        if (ofsc->liveness_check){
+            vector_push_back(c->timed_callbacks, tc_new(ofc->base.evloop->base, send_echo, ofsc->echo_interval * 1000, cc));
+        }
         ofc->connection_callback(cc, OF_EVENT_ESTABLISHED);
 
         if (ofsc->dispatch_all_messages) goto dispatch; else goto done;
@@ -149,7 +151,7 @@ static void base_message_callback(struct base_of_conn* c,
         cc->version = (((uint8_t*) data)[0]);
         cc->state = (STATE_RUNNING);
         if (ofsc->liveness_check)
-            of_conn_add_timed_callback(cc, send_echo, ofsc->echo_interval * 1000, cc);
+            vector_push_back(c->timed_callbacks, tc_new(ofc->base.evloop->base, send_echo, ofsc->echo_interval * 1000, cc));
         ofc->connection_callback(cc, OF_EVENT_ESTABLISHED);
         goto dispatch;
     }

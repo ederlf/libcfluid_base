@@ -27,11 +27,7 @@ static void event_cb(struct bufferevent *bev, short events, void* arg)
     }
 }
 
-static void timer_callback(evutil_socket_t fd, short what, void *arg)
-{
-    struct timed_callback* tc = (struct timed_callback*) arg;
-    tc->cb(tc->cb_arg);
-}
+
 
 static void read_cb(struct bufferevent *bev, void* arg)
 {
@@ -123,15 +119,11 @@ static void notify_conn_cb(struct base_of_conn *conn, enum conn_event event_type
 static void do_close(struct base_of_conn *conn)
 {
     // Stop all timed callbacks
-    tc_ptr *v = conn->timed_callbacks;
-    tc_ptr tc;
+    struct timed_callback **v = conn->timed_callbacks;
     if(conn->timed_callbacks) {
-        tc_ptr *it;
+        struct timed_callback **it;
         for(it = vector_begin(v); it != vector_end(v); ++it) {
-            tc = *it;
-            event_del((struct event*) tc->data);
-            event_free((struct event*) tc->data);
-            free(tc); 
+            tc_destroy(*it); 
         }
     }
     vector_free(conn->timed_callbacks);
@@ -152,20 +144,4 @@ void base_of_conn_close(struct base_of_conn *conn) {
 
 void base_of_conn_send(struct base_of_conn *conn, void* data, size_t len) {
     bufferevent_write(conn->lev_base->bev, data, len);
-}
-
-void base_of_conn_add_timed_callback(struct base_of_conn *conn, void* (*cb)(void*), int interval, void* arg) {
-    struct timeval tv = { interval / 1000, (interval % 1000) * 1000 };
-    struct timed_callback* tc = malloc(sizeof(struct timed_callback));
-    tc->cb = cb;
-    tc->cb_arg = arg;
-    struct event_base* base = (struct event_base*) conn->evl->base;
-    struct event* ev = event_new(base,
-                                 -1,
-                                 EV_PERSIST,
-                                 timer_callback,
-                                 tc);
-    tc->data = ev;
-    vector_push_back(conn->timed_callbacks, tc);
-    event_add(ev, &tv);
 }

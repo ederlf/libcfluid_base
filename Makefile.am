@@ -15,6 +15,7 @@ libcfluid_base_la_SOURCES = cfluid/base/evloop.h cfluid/base/evloop.c\
 						    cfluid/of_conn.h cfluid/of_conn.c \
 						    cfluid/of_settings.h cfluid/of_settings.c\
 						    cfluid/base/of.h\
+						    cfluid/base/timed_callback.h cfluid/base/timed_callback.c \
 						    cfluid/of_client.h cfluid/of_client.c
 libcfluid_base_la_LIBADD = $(libevent_core_LIBS) $(libevent_pthreads_LIBS)
 if TLS
@@ -24,6 +25,7 @@ endif
 libcfluid_base_includedir = $(includedir)
 nobase_libcfluid_base_include_HEADERS = cfluid/base/evloop.h\
 									    cfluid/base/ofp_buffer.h\
+									    cfluid/base/timed_callback.h\
 									    cfluid/base/vector.h\
 							   		    cfluid/base/base_of_conn.h\
 							   		    cfluid/base/base_of_client.h\
