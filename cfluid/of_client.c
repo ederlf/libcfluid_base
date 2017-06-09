@@ -2,7 +2,9 @@
 #include "base/of.h"
 #include "base/vector.h"
 
+static void try_connect(struct of_client *oc, int id);
 static void* send_echo(void* arg);
+static void* try_connect_on_hold(void* arg);
 static void base_message_callback(struct base_of_conn* c, 
                         void* data, size_t len);
 static void base_connection_callback( struct base_of_conn* c, 
@@ -22,7 +24,9 @@ struct of_client *of_client_new(int id,
     struct of_client *ofc = malloc(sizeof(struct of_client));
     base_of_client_init(&ofc->base, id, address, port);
     ofc->ofsc = ofsc;
-    ofc->conn = NULL;
+    ofc->active_conns = NULL;
+    ofc->on_hold_conns = NULL;
+    ofc->timed_callbacks = NULL;
     ofc->base.nconn = nconn;
     ofc->base.ofh.base_connection_callback = base_connection_callback;
     ofc->base.ofh.base_message_callback = base_message_callback;
@@ -34,34 +38,97 @@ struct of_client *of_client_new(int id,
 
 void of_client_destroy(struct of_client *oc)
 {
+    struct of_conn *cconn, *tmp;
+    struct conn_on_hold *coh, *tmp_coh;
     base_of_client_clean(&oc->base);
     of_settings_destroy(oc->ofsc);
-    if (oc->conn){
-        of_conn_destroy(oc->conn);
+    HASH_ITER(hh, oc->active_conns, cconn, tmp) {
+        /* The order matters, del first */
+        HASH_DEL(oc->active_conns, cconn);
+        of_conn_destroy(cconn);
+    }
+    HASH_ITER(hh, oc->on_hold_conns, coh, tmp_coh) {
+        HASH_DEL(oc->on_hold_conns, coh);
+        free(coh);
     }
     free(oc);
 }
 
 int of_client_start(struct of_client *oc, int block)
 {
-    return base_of_client_start(&oc->base, block);
+    int i, ret;
+    for(i = 0; i < oc->base.nconn; ++i) {
+        try_connect(oc, i);
+    }
+    ret = base_of_client_start(&oc->base, block);
+    vector_push_back(oc->timed_callbacks, tc_new(oc->base.evloop->base, try_connect_on_hold, 5000, oc));
+    return ret;
 }
 
-void of_client_start_conn(struct of_client *oc){
-    base_of_client_start_conn(&oc->base);
+void of_client_start_conn(struct of_client *oc, int id){
+    // base_of_client_start_conn(&oc->base);
 }
 
-void of_client_stop_conn(struct of_client *oc){
-    if (oc->conn != NULL){
-        of_conn_close(oc->conn);
-        of_conn_destroy(oc->conn);
-        oc->conn = NULL;
+void of_client_stop_conn(struct of_client *oc, int id){
+    struct of_conn *conn;
+    HASH_FIND_INT(oc->active_conns, &id, conn);
+    if (conn != NULL){
+        HASH_DEL(oc->active_conns, conn);
+        of_conn_close(conn);
+        of_conn_destroy(conn);
     }
 }
 
 void of_client_stop(struct of_client *oc) {
-    of_client_stop_conn(oc);
+    struct of_conn *cconn, *tmp;
+    struct timed_callback **v = oc->timed_callbacks;
+    HASH_ITER(hh, oc->active_conns, cconn, tmp) {
+        of_client_stop_conn(oc, cconn->id);
+    }
+    /* Clean callbacks */
+    if(oc->timed_callbacks) {
+        struct timed_callback **it;
+        for(it = vector_begin(v); it != vector_end(v); ++it) {
+            tc_destroy(*it); 
+        }
+        vector_free(oc->timed_callbacks);
+    }
     base_of_client_stop(&oc->base);
+}
+
+static void try_connect(struct of_client *oc, int id)
+{
+    int sock;
+    struct sockaddr_in echoserver;
+
+    /* Create the TCP socket */
+    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        fprintf(stderr, "Error creating socket");    
+    }
+    else { 
+        memset(&echoserver, 0, sizeof(echoserver));
+        echoserver.sin_family = AF_INET;
+        echoserver.sin_addr.s_addr = inet_addr(oc->base.address);
+        echoserver.sin_port = htons(oc->base.port);
+        if (connect(sock, (struct sockaddr *) &echoserver, sizeof(echoserver)) < 0) {
+            struct conn_on_hold *coh;
+            HASH_FIND_INT(oc->on_hold_conns, &id, coh);
+            if (!coh){
+                coh = malloc(sizeof(struct conn_on_hold));
+                coh->id = id;
+                HASH_ADD_INT(oc->on_hold_conns, id, coh);
+            }
+            close(sock);
+            fprintf(stderr, "Failed to connect...\n");
+        }
+        else {
+            struct base_of_conn* c = base_of_conn_new(id,
+                                                   (struct base_of_handler*) &oc->base,
+                                                   oc->base.evloop,
+                                                   &oc->base,
+                                                   sock);
+        }
+    }
 }
 
 static void base_message_callback(struct base_of_conn* c, 
@@ -178,7 +245,7 @@ static void base_connection_callback(struct base_of_conn* c,
     means a CLOSED event will happen and nothing should be expected from
     the connection. */
     struct of_client *ofc = (struct of_client*) c->owner;
-
+    struct of_conn *conn;
     if (event_type == EVENT_CLOSED) {
         base_of_client_base_connection_callback(c, event_type);
         return;
@@ -194,19 +261,34 @@ static void base_connection_callback(struct base_of_conn* c,
             msg.header.xid = htonl(HELLO_XID);
             base_of_conn_send(c, &msg, 8);
         }
-
-        ofc->conn = of_conn_new(c);
-        
-        ofc->connection_callback(ofc->conn, OF_EVENT_STARTED);
+        struct conn_on_hold *coh;
+        HASH_FIND_INT(ofc->on_hold_conns, &conn_id, coh);
+        if (coh){
+            HASH_DEL(ofc->on_hold_conns, coh);
+            free(coh);
+        }
+        conn = of_conn_new(c);
+        HASH_ADD_INT( ofc->active_conns, id, conn );
+        ofc->connection_callback(conn, OF_EVENT_STARTED);
     }
     else if (event_type == EVENT_DOWN) {
-        ofc->connection_callback(ofc->conn, OF_EVENT_CLOSED);
+        HASH_FIND_INT(ofc->active_conns, &conn_id, conn);
+        ofc->connection_callback(conn, OF_EVENT_CLOSED);
     }
 }
 
 static void free_data(void *data)
 {
     base_of_client_free_data(data);
+}
+
+static void* try_connect_on_hold(void* arg) {
+    struct conn_on_hold *coh, *tmp;
+    struct of_client *ofc = (struct of_client*) arg;
+    HASH_ITER(hh, ofc->on_hold_conns, coh, tmp){
+        try_connect(ofc, coh->id);
+    }
+    return NULL;
 }
 
 static void* send_echo(void* arg) {
@@ -234,10 +316,17 @@ static void* send_echo(void* arg) {
 static void connection_callback(struct of_conn *conn, 
                                 enum ofconn_event event_type)
 {
-    struct of_client *ofc = (struct of_client*) conn->conn->owner;
+    struct of_client *oc = (struct of_client*) conn->conn->owner;
     if(event_type == OF_EVENT_CLOSED){
-        of_client_stop_conn(ofc);
-        of_client_start_conn(ofc);
+        struct conn_on_hold *coh;
+        int id = conn->id;
+        HASH_FIND_INT(oc->on_hold_conns, &id, coh);
+        if (!coh){
+            coh = malloc(sizeof(struct conn_on_hold));
+            coh->id = id;
+            HASH_ADD_INT(oc->on_hold_conns, id, coh);
+        }
+        of_client_stop_conn(oc, id);
     }
 }
 

@@ -45,22 +45,9 @@ static void* try_connect(void* arg)
     return NULL;
 }
 
-// static void try_connect(struct base_of_client *boc, int id)
-// {
-
-// }
-
-void base_of_client_start_conn(struct base_of_client *bofc)
-{
-    pthread_create(&bofc->conn_t, NULL,
-                      try_connect,
-                       bofc);
-}
-
 int base_of_client_start(struct base_of_client *bofc, int block)
 {
     bofc->blocking = block;
-    base_of_client_start_conn(bofc);
     if (!bofc->blocking) {
         pthread_create(&bofc->t,
                        NULL,
@@ -74,7 +61,6 @@ int base_of_client_start(struct base_of_client *bofc, int block)
 }
 
 void base_of_client_stop(struct base_of_client *bofc) {
-    pthread_cancel(bofc->conn_t);
     ev_loop_stop(bofc->evloop);
     if (!bofc->blocking) {
         pthread_join(bofc->t, NULL);

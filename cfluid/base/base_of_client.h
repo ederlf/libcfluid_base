@@ -11,7 +11,6 @@ struct base_of_client {
     int nconn;
     struct ev_loop *evloop;
     pthread_t t;
-    pthread_t conn_t;
     char address[12];
     int port;
 };
