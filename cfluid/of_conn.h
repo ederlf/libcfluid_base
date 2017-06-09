@@ -1,8 +1,10 @@
 #ifndef OF_CONN_H
 #define OF_CONN_H 1
 
+#include "base/uthash.h"
 #include "base/base_of_conn.h"
 #include <inttypes.h>
+
 
 enum state {
     /** Sent hello message, waiting for reply */
@@ -51,6 +53,7 @@ struct of_conn {
     uint8_t version;
     int alive;
     void* application_data;
+    UT_hash_handle hh;
 };
 
 struct of_conn *of_conn_new(struct base_of_conn *bconn);

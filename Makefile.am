@@ -27,6 +27,7 @@ nobase_libcfluid_base_include_HEADERS = cfluid/base/evloop.h\
 									    cfluid/base/ofp_buffer.h\
 									    cfluid/base/timed_callback.h\
 									    cfluid/base/vector.h\
+									    cfluid/base/uthash.h\
 							   		    cfluid/base/base_of_conn.h\
 							   		    cfluid/base/base_of_client.h\
 							   		    cfluid/of_conn.h\
