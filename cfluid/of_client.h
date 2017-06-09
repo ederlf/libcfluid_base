@@ -13,7 +13,7 @@ struct of_client {
     void (*message_callback)(struct of_conn* conn, uint8_t type, void* data, size_t len);
 };
 
-struct of_client *of_client_new(int id, char* address, int port,
+struct of_client *of_client_new(int id, char* address, int port, int nconn,
              struct of_settings *ofsc);
 void of_client_destroy(struct of_client *oc);
 int of_client_start(struct of_client *oc, int block);

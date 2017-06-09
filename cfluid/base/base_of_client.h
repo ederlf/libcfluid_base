@@ -8,6 +8,7 @@ struct base_of_client {
     struct base_of_handler ofh;
     int id;
     int blocking;
+    int nconn;
     struct ev_loop *evloop;
     pthread_t t;
     pthread_t conn_t;

@@ -7,6 +7,7 @@ void base_of_client_init(struct base_of_client *oc,
     oc->id = id;
     strncpy(oc->address, address, strlen(address) + 1);
     oc->port = port;
+    oc->nconn = 0;
     oc->evloop = ev_loop_new(0);
 }
 
@@ -43,6 +44,11 @@ static void* try_connect(void* arg)
                                                sock);
     return NULL;
 }
+
+// static void try_connect(struct base_of_client *boc, int id)
+// {
+
+// }
 
 void base_of_client_start_conn(struct base_of_client *bofc)
 {

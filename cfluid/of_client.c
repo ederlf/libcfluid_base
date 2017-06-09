@@ -16,13 +16,14 @@ static void message_callback(struct of_conn* conn,
                              uint8_t type, void* data, size_t len);
 
 struct of_client *of_client_new(int id, 
-                                     char* address, int port,
+                                     char* address, int port, int nconn,
                                     struct of_settings *ofsc)
 {
     struct of_client *ofc = malloc(sizeof(struct of_client));
     base_of_client_init(&ofc->base, id, address, port);
     ofc->ofsc = ofsc;
     ofc->conn = NULL;
+    ofc->base.nconn = nconn;
     ofc->base.ofh.base_connection_callback = base_connection_callback;
     ofc->base.ofh.base_message_callback = base_message_callback;
     ofc->base.ofh.free_data = free_data;
