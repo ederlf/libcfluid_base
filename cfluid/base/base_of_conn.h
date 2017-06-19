@@ -19,7 +19,7 @@ enum conn_event {
     };
 
 struct base_of_conn {
-    int id;
+    uint64_t id;
     struct ev_loop *evl;
     struct ofp_buffer *ofb;
     struct base_of_handler *ofh;
@@ -39,7 +39,7 @@ struct base_of_handler {
     void (*free_data) (void* data);                            
 };
 
-struct base_of_conn *base_of_conn_new(int id,
+struct base_of_conn *base_of_conn_new(uint64_t id,
                         struct base_of_handler *ofhandler,
                         struct ev_loop* evloop,
                         void *owner,

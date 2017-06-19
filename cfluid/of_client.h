@@ -6,7 +6,7 @@
 #include "of_settings.h"
 
 struct conn_on_hold {
-    int id;
+    uint64_t id;
     UT_hash_handle hh;
 };
 
@@ -20,12 +20,12 @@ struct of_client {
     void (*message_callback)(struct of_conn* conn, uint8_t type, void* data, size_t len);
 };
 
-struct of_client *of_client_new(int id, char* address, int port, int nconn,
-             struct of_settings *ofsc);
+struct of_client *of_client_new(uint64_t id, char* address, 
+                                int port, int nconn,struct of_settings *ofsc);
 void of_client_destroy(struct of_client *oc);
 int of_client_start(struct of_client *oc, int block);
-void of_client_start_conn(struct of_client *oc, int id);
-void of_client_stop_conn(struct of_client *oc, int id);
+void of_client_start_conn(struct of_client *oc, uint64_t id);
+void of_client_stop_conn(struct of_client *oc, uint64_t id);
 void of_client_stop(struct of_client *oc);
 
 #endif

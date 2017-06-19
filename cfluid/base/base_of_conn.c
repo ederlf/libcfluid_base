@@ -60,7 +60,7 @@ static void close_cb(int fd, short which, void *arg) {
     do_close(c);
 }
 
-struct base_of_conn *base_of_conn_new(int id,
+struct base_of_conn *base_of_conn_new(uint64_t id,
                         struct base_of_handler* ofhandler,
                         struct ev_loop* evloop,
                         void *owner,

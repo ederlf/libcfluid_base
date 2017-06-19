@@ -2,7 +2,7 @@
 #include "base/of.h"
 #include "base/vector.h"
 
-static void try_connect(struct of_client *oc, int id);
+static void try_connect(struct of_client *oc, uint64_t id);
 static void* send_echo(void* arg);
 static void* try_connect_on_hold(void* arg);
 static void base_message_callback(struct base_of_conn* c, 
@@ -17,9 +17,8 @@ static void connection_callback(struct of_conn *conn,
 static void message_callback(struct of_conn* conn, 
                              uint8_t type, void* data, size_t len);
 
-struct of_client *of_client_new(int id, 
-                                     char* address, int port, int nconn,
-                                    struct of_settings *ofsc)
+struct of_client *of_client_new(uint64_t id, char* address, int port, int 
+                                nconn, struct of_settings *ofsc)
 {
     struct of_client *ofc = malloc(sizeof(struct of_client));
     base_of_client_init(&ofc->base, id, address, port);
@@ -65,13 +64,13 @@ int of_client_start(struct of_client *oc, int block)
     return ret;
 }
 
-void of_client_start_conn(struct of_client *oc, int id){
+void of_client_start_conn(struct of_client *oc, uint64_t id){
     // base_of_client_start_conn(&oc->base);
 }
 
-void of_client_stop_conn(struct of_client *oc, int id){
+void of_client_stop_conn(struct of_client *oc, uint64_t id){
     struct of_conn *conn;
-    HASH_FIND_INT(oc->active_conns, &id, conn);
+    HASH_FIND(hh, oc->active_conns, &id, sizeof(uint64_t), conn);
     if (conn != NULL){
         HASH_DEL(oc->active_conns, conn);
         of_conn_close(conn);
@@ -96,7 +95,7 @@ void of_client_stop(struct of_client *oc) {
     base_of_client_stop(&oc->base);
 }
 
-static void try_connect(struct of_client *oc, int id)
+static void try_connect(struct of_client *oc, uint64_t id)
 {
     int sock;
     struct sockaddr_in echoserver;
@@ -112,11 +111,11 @@ static void try_connect(struct of_client *oc, int id)
         echoserver.sin_port = htons(oc->base.port);
         if (connect(sock, (struct sockaddr *) &echoserver, sizeof(echoserver)) < 0) {
             struct conn_on_hold *coh;
-            HASH_FIND_INT(oc->on_hold_conns, &id, coh);
+            HASH_FIND(hh, oc->on_hold_conns, &id, sizeof(uint64_t), coh);
             if (!coh){
                 coh = malloc(sizeof(struct conn_on_hold));
                 coh->id = id;
-                HASH_ADD_INT(oc->on_hold_conns, id, coh);
+                HASH_ADD(hh, oc->on_hold_conns, id, sizeof(uint64_t), coh);
             }
             close(sock);
             fprintf(stderr, "Failed to connect...\n");
@@ -251,7 +250,7 @@ static void base_connection_callback(struct base_of_conn* c,
         return;
     }
 
-    int conn_id = c->id;
+    uint64_t conn_id = c->id;
     if (event_type == EVENT_UP) {
         if (ofc->ofsc->handshake) {
             struct ofp_hello msg;
@@ -262,17 +261,17 @@ static void base_connection_callback(struct base_of_conn* c,
             base_of_conn_send(c, &msg, 8);
         }
         struct conn_on_hold *coh;
-        HASH_FIND_INT(ofc->on_hold_conns, &conn_id, coh);
+        HASH_FIND(hh, ofc->on_hold_conns, &conn_id, sizeof(uint64_t), coh);
         if (coh){
             HASH_DEL(ofc->on_hold_conns, coh);
             free(coh);
         }
         conn = of_conn_new(c);
-        HASH_ADD_INT( ofc->active_conns, id, conn );
+        HASH_ADD(hh, ofc->active_conns, id, sizeof(uint64_t), conn );
         ofc->connection_callback(conn, OF_EVENT_STARTED);
     }
     else if (event_type == EVENT_DOWN) {
-        HASH_FIND_INT(ofc->active_conns, &conn_id, conn);
+        HASH_FIND(hh, ofc->active_conns, &conn_id, sizeof(uint64_t), conn);
         ofc->connection_callback(conn, OF_EVENT_CLOSED);
     }
 }
@@ -319,8 +318,8 @@ static void connection_callback(struct of_conn *conn,
     struct of_client *oc = (struct of_client*) conn->conn->owner;
     if(event_type == OF_EVENT_CLOSED){
         struct conn_on_hold *coh;
-        int id = conn->id;
-        HASH_FIND_INT(oc->on_hold_conns, &id, coh);
+        uint64_t id = conn->id;
+        HASH_FIND(hh, oc->on_hold_conns, &id, sizeof(uint64_t), coh);
         if (!coh){
             coh = malloc(sizeof(struct conn_on_hold));
             coh->id = id;

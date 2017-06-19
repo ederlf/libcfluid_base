@@ -1,7 +1,7 @@
 #include "evloop.h"
 #include <stdlib.h>
 
-struct ev_loop *ev_loop_new(int id)
+struct ev_loop *ev_loop_new(uint64_t id)
 {
     struct ev_loop *evl = malloc(sizeof(struct ev_loop));
     evl->id = id;
