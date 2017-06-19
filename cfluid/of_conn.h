@@ -48,7 +48,7 @@ enum ofconn_event {
 
 struct of_conn {
     struct base_of_conn* conn;
-    int id;
+    uint64_t id;
     enum state state;
     uint8_t version;
     int alive;

@@ -1,7 +1,7 @@
 #include "base_of_client.h"
 
 void base_of_client_init(struct base_of_client *oc, 
-                         int id, const char *address, int port)
+                         uint64_t id, const char *address, int port)
 {
     evthread_use_pthreads();
     oc->id = id;
