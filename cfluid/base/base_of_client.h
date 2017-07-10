@@ -8,15 +8,11 @@ struct base_of_client {
     struct base_of_handler ofh;
     uint64_t id;
     int blocking;
-    int nconn;
     struct ev_loop *evloop;
     pthread_t t;
-    char address[12];
-    int port;
 };
 
-void base_of_client_init(struct base_of_client *oc, 
-                         uint64_t id, const char *address, int port);
+void base_of_client_init(struct base_of_client *oc, uint64_t id);
 void base_of_client_clean(struct base_of_client *oc);
 int base_of_client_start(struct base_of_client *conn, int block);
 void base_of_client_stop(struct base_of_client *conn);

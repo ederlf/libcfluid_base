@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include "base/evloop.h"
+#include "base/uthash.h"
 
 struct of_settings {
         uint32_t supported_versions;
@@ -20,10 +21,13 @@ struct of_settings {
         uint8_t n_tables;
         uint8_t auxiliary_id;
         uint32_t capabilities;
+        char address[12];
+        int port;
         struct ev_loop *evloop;
+        UT_hash_handle hh;
 };
 
-struct of_settings *of_settings_new(); 
+struct of_settings *of_settings_new(char *address, int port, bool is_ctrl); 
 void of_settings_destroy(struct of_settings *ofsc);
 void ofsc_supported_version(struct of_settings *os, const uint8_t version);
 /**

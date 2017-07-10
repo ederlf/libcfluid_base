@@ -2,7 +2,7 @@
 #include "base/of.h"
 #include "base/vector.h"
 
-static void try_connect(struct of_client *oc, uint64_t id);
+static void try_connect(struct of_client *oc, struct of_settings *ofsc);
 static void* send_echo(void* arg);
 static void* try_connect_on_hold(void* arg);
 static void base_message_callback(struct base_of_conn* c, 
@@ -17,16 +17,15 @@ static void connection_callback(struct of_conn *conn,
 static void message_callback(struct of_conn* conn, 
                              uint8_t type, void* data, size_t len);
 
-struct of_client *of_client_new(uint64_t id, char* address, int port, int 
-                                nconn, struct of_settings *ofsc)
+struct of_client *of_client_new(uint64_t id)
 {
     struct of_client *ofc = malloc(sizeof(struct of_client));
-    base_of_client_init(&ofc->base, id, address, port);
-    ofc->ofsc = ofsc;
+    base_of_client_init(&ofc->base, id);
+    ofc->ofscs = NULL;
     ofc->active_conns = NULL;
     ofc->on_hold_conns = NULL;
     ofc->timed_callbacks = NULL;
-    ofc->base.nconn = nconn;
+    ofc->owner = NULL;
     ofc->base.ofh.base_connection_callback = base_connection_callback;
     ofc->base.ofh.base_message_callback = base_message_callback;
     ofc->base.ofh.free_data = free_data;
@@ -38,11 +37,15 @@ struct of_client *of_client_new(uint64_t id, char* address, int port, int
 void of_client_destroy(struct of_client *oc)
 {
     struct of_conn *cconn, *tmp;
+    struct of_settings *ofsc, *ofsc_tmp;
     struct conn_on_hold *coh, *tmp_coh;
     base_of_client_clean(&oc->base);
-    of_settings_destroy(oc->ofsc);
+    HASH_ITER(hh, oc->ofscs, ofsc, ofsc_tmp) {
+        /* Free the hash node before the element */
+        HASH_DEL(oc->ofscs, ofsc);
+        of_settings_destroy(ofsc);
+    }
     HASH_ITER(hh, oc->active_conns, cconn, tmp) {
-        /* The order matters, del first */
         HASH_DEL(oc->active_conns, cconn);
         of_conn_destroy(cconn);
     }
@@ -53,11 +56,18 @@ void of_client_destroy(struct of_client *oc)
     free(oc);
 }
 
+void of_client_add_ofsc(struct of_client *oc, struct of_settings *ofsc)
+{
+    HASH_ADD(hh, oc->ofscs, datapath_id, sizeof(uint64_t), ofsc);    
+}
+
 int of_client_start(struct of_client *oc, int block)
 {
     int i, ret;
-    for(i = 0; i < oc->base.nconn; ++i) {
-        try_connect(oc, i);
+    struct of_settings *ofsc, *ofsc_tmp;
+    /* Connect for every datapath present */
+    HASH_ITER(hh, oc->ofscs, ofsc, ofsc_tmp) {
+        try_connect(oc, ofsc);
     }
     ret = base_of_client_start(&oc->base, block);
     vector_push_back(oc->timed_callbacks, tc_new(oc->base.evloop->base, try_connect_on_hold, 5000, oc));
@@ -95,7 +105,7 @@ void of_client_stop(struct of_client *oc) {
     base_of_client_stop(&oc->base);
 }
 
-static void try_connect(struct of_client *oc, uint64_t id)
+static void try_connect(struct of_client *oc, struct of_settings *ofsc)
 {
     int sock;
     struct sockaddr_in echoserver;
@@ -107,21 +117,22 @@ static void try_connect(struct of_client *oc, uint64_t id)
     else { 
         memset(&echoserver, 0, sizeof(echoserver));
         echoserver.sin_family = AF_INET;
-        echoserver.sin_addr.s_addr = inet_addr(oc->base.address);
-        echoserver.sin_port = htons(oc->base.port);
+        echoserver.sin_addr.s_addr = inet_addr(ofsc->address);
+        echoserver.sin_port = htons(ofsc->port);
         if (connect(sock, (struct sockaddr *) &echoserver, sizeof(echoserver)) < 0) {
             struct conn_on_hold *coh;
-            HASH_FIND(hh, oc->on_hold_conns, &id, sizeof(uint64_t), coh);
+            HASH_FIND(hh, oc->on_hold_conns, 
+                      &ofsc->datapath_id, sizeof(uint64_t), coh);
             if (!coh){
                 coh = malloc(sizeof(struct conn_on_hold));
-                coh->id = id;
+                coh->id = ofsc->datapath_id;
                 HASH_ADD(hh, oc->on_hold_conns, id, sizeof(uint64_t), coh);
             }
             close(sock);
             fprintf(stderr, "Failed to connect...\n");
         }
         else {
-            struct base_of_conn* c = base_of_conn_new(id,
+            struct base_of_conn* c = base_of_conn_new(ofsc->datapath_id,
                                                    (struct base_of_handler*) &oc->base,
                                                    oc->base.evloop,
                                                    &oc->base,
@@ -135,9 +146,15 @@ static void base_message_callback(struct base_of_conn* c,
     uint8_t type = ((uint8_t*) data)[1];
     struct of_conn *cc = (struct of_conn*) c->manager;
     struct of_client *ofc = (struct of_client*) c->owner;
-    struct of_settings *ofsc = ofc->ofsc;
+    struct of_settings *ofsc;
     // We trust that the other end is using the negotiated protocol
     // version. Should we?
+
+    /* Jump to the end if there is not a configuration for the id */
+    HASH_FIND(hh, ofc->ofscs, &cc->id, sizeof(uint64_t), ofsc);
+    if(!ofsc){
+        goto done;
+    }
 
     if (ofsc->liveness_check && type == OFPT_ECHO_REQUEST) {
         uint8_t msg[8];
@@ -198,11 +215,13 @@ static void base_message_callback(struct base_of_conn* c,
         reply.header.type = OFPT_FEATURES_REPLY;
         reply.header.length = htons(sizeof(reply));
         reply.header.xid = ((uint32_t*) data)[1];
-        reply.datapath_id = ofsc->datapath_id;
-        reply.n_buffers = ofsc->n_buffers;
+        /* Hton for 64 bits */
+        reply.datapath_id =  (((uint64_t)htonl(ofsc->datapath_id)) << 32) +
+                             htonl(ofsc->datapath_id >> 32); 
+        reply.n_buffers = htonl(ofsc->n_buffers);
         reply.n_tables = ofsc->n_tables;
         reply.auxiliary_id = ofsc->auxiliary_id;
-        reply.capabilities = ofsc->capabilities;
+        reply.capabilities = htonl(ofsc->capabilities);
         of_conn_send(cc, &reply, sizeof(reply));
 
         if (ofsc->liveness_check){
@@ -244,7 +263,14 @@ static void base_connection_callback(struct base_of_conn* c,
     means a CLOSED event will happen and nothing should be expected from
     the connection. */
     struct of_client *ofc = (struct of_client*) c->owner;
+    struct of_settings *ofsc;
     struct of_conn *conn;
+
+    HASH_FIND(hh, ofc->ofscs, &c->id, sizeof(uint64_t), ofsc);
+    if(!ofsc){
+        return;
+    }
+
     if (event_type == EVENT_CLOSED) {
         base_of_client_base_connection_callback(c, event_type);
         return;
@@ -252,9 +278,9 @@ static void base_connection_callback(struct base_of_conn* c,
 
     uint64_t conn_id = c->id;
     if (event_type == EVENT_UP) {
-        if (ofc->ofsc->handshake) {
+        if (ofsc->handshake) {
             struct ofp_hello msg;
-            msg.header.version = ofc->ofsc->max_supported_version;
+            msg.header.version = ofsc->max_supported_version;
             msg.header.type = OFPT_HELLO;
             msg.header.length = htons(8);
             msg.header.xid = htonl(HELLO_XID);
@@ -284,8 +310,12 @@ static void free_data(void *data)
 static void* try_connect_on_hold(void* arg) {
     struct conn_on_hold *coh, *tmp;
     struct of_client *ofc = (struct of_client*) arg;
+    struct of_settings *ofsc;
     HASH_ITER(hh, ofc->on_hold_conns, coh, tmp){
-        try_connect(ofc, coh->id);
+        HASH_FIND(hh, ofc->ofscs, &coh->id, sizeof(uint64_t), ofsc);
+        if(ofsc){
+            try_connect(ofc, ofsc);
+        }
     }
     return NULL;
 }

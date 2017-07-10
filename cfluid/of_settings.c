@@ -1,5 +1,6 @@
 #include "of_settings.h"
 #include <stdlib.h>
+#include <string.h>
 
 static void add_version(struct of_settings *os, const uint8_t version)
 {
@@ -13,7 +14,7 @@ static void add_version(struct of_settings *os, const uint8_t version)
     os->max_supported_version--;
 }
 
-struct of_settings *of_settings_new()
+struct of_settings *of_settings_new(char *address, int port, bool is_ctrl)
 {
     struct of_settings *os = malloc(sizeof(struct of_settings));
     os->supported_versions = 0;
@@ -25,12 +26,14 @@ struct of_settings *of_settings_new()
     os->dispatch_all_messages = false;
     os->use_hello_elements = false;
     os->keep_data_ownership = true;
-    os->is_controller = true;
+    os->is_controller = is_ctrl;
     os->datapath_id = 0;
     os->auxiliary_id = 0;
     os->n_buffers = 0;
     os->n_tables = 0;
     os->capabilities = 0;
+    strncpy(os->address, address, strlen(address) + 1);
+    os->port = port;
     os->evloop = NULL;
     return os;
 } 

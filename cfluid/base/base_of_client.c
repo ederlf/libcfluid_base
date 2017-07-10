@@ -1,48 +1,15 @@
 #include "base_of_client.h"
 
-void base_of_client_init(struct base_of_client *oc, 
-                         uint64_t id, const char *address, int port)
+void base_of_client_init(struct base_of_client *oc, uint64_t id)
 {
     evthread_use_pthreads();
-    oc->id = id;
-    strncpy(oc->address, address, strlen(address) + 1);
-    oc->port = port;
-    oc->nconn = 0;
+    oc->id = id;    
     oc->evloop = ev_loop_new(0);
 }
 
 void base_of_client_clean(struct base_of_client *oc)
 {
     ev_loop_destroy(oc->evloop);
-}
-
-static void* try_connect(void* arg)
-{
-    int sock;
-    struct sockaddr_in echoserver;
-    int received = 0;
-
-    struct base_of_client *boc = (struct base_of_client *) arg;
-
-    /* Create the TCP socket */
-    if ((sock = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-        fprintf(stderr, "Error creating socket");
-        return NULL;
-    }
-    memset(&echoserver, 0, sizeof(echoserver));
-    echoserver.sin_family = AF_INET;
-    echoserver.sin_addr.s_addr = inet_addr(boc->address);
-    echoserver.sin_port = htons(boc->port);
-    while (connect(sock, (struct sockaddr *) &echoserver, sizeof(echoserver)) < 0) {
-        fprintf(stderr, "Retrying in 5 seconds...\n");
-        sleep(5);
-    }
-    struct base_of_conn* c = base_of_conn_new(0,
-                                               (struct base_of_handler*) boc,
-                                               boc->evloop,
-                                               boc,
-                                               sock);
-    return NULL;
 }
 
 int base_of_client_start(struct base_of_client *bofc, int block)
