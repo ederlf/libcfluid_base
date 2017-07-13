@@ -18,7 +18,7 @@ struct of_settings *of_settings_new(char *address, int port, bool is_ctrl)
 {
     struct of_settings *os = malloc(sizeof(struct of_settings));
     os->supported_versions = 0;
-    add_version(os, 1);
+    add_version(os, 0x04);
     os->version_set_by_hand = false;
     os->echo_interval = 15;
     os->liveness_check = true;
