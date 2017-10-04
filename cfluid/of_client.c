@@ -129,7 +129,6 @@ static void try_connect(struct of_client *oc, struct of_settings *ofsc)
                 HASH_ADD(hh, oc->on_hold_conns, id, sizeof(uint64_t), coh);
             }
             close(sock);
-            fprintf(stderr, "Failed to connect...\n");
         }
         else {
             struct base_of_conn* c = base_of_conn_new(ofsc->datapath_id,
