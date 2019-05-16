@@ -1,6 +1,7 @@
 #include "of_client.h"
 #include "base/of.h"
 #include "base/vector.h"
+#include <unistd.h> 
 
 static void try_connect(struct of_client *oc, struct of_settings *ofsc);
 static void* send_echo(void* arg);

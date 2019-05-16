@@ -1,4 +1,5 @@
 #include "base_of_client.h"
+#include <event2/event-config.h>
 
 void base_of_client_init(struct base_of_client *oc, uint64_t id)
 {
