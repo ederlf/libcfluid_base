@@ -1,8 +1,10 @@
 #ifndef OF_CONN_H
 #define OF_CONN_H 1
 
+#include "base/uthash.h"
 #include "base/base_of_conn.h"
 #include <inttypes.h>
+
 
 enum state {
     /** Sent hello message, waiting for reply */
@@ -46,19 +48,17 @@ enum ofconn_event {
 
 struct of_conn {
     struct base_of_conn* conn;
-    int id;
+    uint64_t id;
     enum state state;
     uint8_t version;
     int alive;
     void* application_data;
+    UT_hash_handle hh;
 };
 
 struct of_conn *of_conn_new(struct base_of_conn *bconn);
 void of_conn_destroy(struct of_conn *c);
 void of_conn_send(struct of_conn *c, void* data, size_t len);
-void of_conn_add_timed_callback(struct of_conn *oc, void* (*cb)(void*),
-                                      int interval,
-                                      void* arg); 
 void of_conn_close(struct of_conn *oc);
 
 #endif

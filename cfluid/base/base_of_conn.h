@@ -1,8 +1,10 @@
 #ifndef BASE_OF_CONN
 #define BASE_OF_CONN 1
 
-#include "ofp_buffer.h"
 #include "evloop.h"
+#include "ofp_buffer.h"
+#include "timed_callback.h"
+
 
 struct leventbaseconn;
 struct base_of_handler;
@@ -16,23 +18,15 @@ enum conn_event {
         EVENT_CLOSED
     };
 
-struct timed_callback {
-        void* (*cb)(void*);
-        void* cb_arg;
-        void* data;
-    };
-
-typedef struct timed_callback * tc_ptr;
-
 struct base_of_conn {
-    int id;
+    uint64_t id;
     struct ev_loop *evl;
     struct ofp_buffer *ofb;
     struct base_of_handler *ofh;
     void *manager;
     void *owner;
     int running;
-    tc_ptr *timed_callbacks;
+    struct timed_callback **timed_callbacks; /* dynamic array of callbacks */
     struct leventbaseconn *lev_base; 
 };
 
@@ -45,14 +39,13 @@ struct base_of_handler {
     void (*free_data) (void* data);                            
 };
 
-struct base_of_conn *base_of_conn_new(int id,
+struct base_of_conn *base_of_conn_new(uint64_t id,
                         struct base_of_handler *ofhandler,
                         struct ev_loop* evloop,
                         void *owner,
                         int fd);
 void base_of_conn_destroy(struct base_of_conn *conn);
 void base_of_conn_send(struct base_of_conn *conn, void* data, size_t len);
-void base_of_conn_add_timed_callback(struct base_of_conn *conn, void* (*cb)(void*), int interval, void* arg);
 void base_of_conn_close(struct base_of_conn *conn);
 
 #endif

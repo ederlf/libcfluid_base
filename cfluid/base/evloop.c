@@ -1,13 +1,12 @@
 #include "evloop.h"
 #include <stdlib.h>
 
-struct ev_loop *ev_loop_new(int id)
+struct ev_loop *ev_loop_new(uint64_t id)
 {
     struct ev_loop *evl = malloc(sizeof(struct ev_loop));
     evl->id = id;
     evl->base = event_base_new();
     evl->stopped = false;
-    event_base_add_virtual(evl->base);
     return evl;
 }
 
@@ -22,10 +21,7 @@ void ev_loop_run(struct ev_loop *ev)
     if (ev->stopped) return;
 
     event_base_dispatch(ev->base);
-    // See note in EventLoop::EventLoop. Here we disable the virtual event
-    // to guarantee that nothing blocks.
-    event_base_del_virtual(ev->base);
-    event_base_loop(ev->base, EVLOOP_NONBLOCK);
+    event_base_loop(ev->base, EVLOOP_NONBLOCK & EVLOOP_NO_EXIT_ON_EMPTY);
 }
 
 void ev_loop_stop(struct ev_loop *ev)
