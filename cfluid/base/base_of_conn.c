@@ -95,6 +95,7 @@ struct base_of_conn *base_of_conn_new(uint64_t id,
                       event_cb,
                       conn);
     bufferevent_enable(conn->lev_base->bev, EV_READ|EV_WRITE);
+    return conn;
 }
 
 void base_of_conn_destroy(struct base_of_conn *conn)
