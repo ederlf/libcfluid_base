@@ -171,7 +171,7 @@ static void base_message_callback(struct base_of_conn* c,
 
     if (ofsc->handshake && type == OFPT_HELLO) {
         uint8_t version = ((uint8_t*) data)[0];
-        if (!ofsc->supported_versions & (1 << (version - 1))) {
+        if (version >= 32 || !(ofsc->supported_versions & (1U << version))) {
             uint8_t msg[12];
             memset((void*) msg, 0, 8);
             msg[0] = version;
